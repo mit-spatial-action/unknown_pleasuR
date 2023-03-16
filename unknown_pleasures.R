@@ -50,7 +50,7 @@ st_regular_lines <- function(df, dims, mask = TRUE) {
   lines <- sf::st_sfc(crs = sf::st_crs(df))
   for (line in line_positions) {
     if (dims$type == "vertical") {
-      coords <- c(line, dims$edge_max, line, dims$edge_min)
+      coords <- c(line, dims$edge_min, line, dims$edge_max)
     } else if (dims$type == "horizontal") {
       coords <- c(dims$edge_min, line, dims$edge_max, line)
     }
@@ -116,7 +116,8 @@ st_unknown_pleasures <- function(
         type = "regular"
       )
     ) %>%
-    sf::st_cast("POINT") 
+    sf::st_cast("POINT")
+    
   print("Extracting elevations at sample points...")
   elevated_lines$elev <- raster::extract(raster, elevated_lines)
   if (!max) {
@@ -142,11 +143,10 @@ st_unknown_pleasures <- function(
     ) %>%
     dplyr::ungroup() %>%
     sf::st_set_crs(sf::st_crs(lines)) %>%
-    dplyr::group_by(id) %>%
-    dplyr::summarize() %>%
-    sf::st_cast("LINESTRING") %>%
-    dplyr::ungroup()
-  
+    group_by(id) %>%
+    summarize(do_union = FALSE) %>%
+    sf::st_cast("LINESTRING")
+
   if (polygon) {
     print("Building polygons...")
     lines <- lines %>%
@@ -158,5 +158,7 @@ st_unknown_pleasures <- function(
       sf::st_cast("POLYGON") %>%
       dplyr::arrange(desc(id)) %>%
       dplyr::ungroup ()
+  } else {
+    elevated_lines
   }
 }
