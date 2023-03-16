@@ -53,6 +53,8 @@ st_regular_lines <- function(df, dims, mask = TRUE) {
       coords <- c(line, dims$edge_max, line, dims$edge_min)
     } else if (dims$type == "horizontal") {
       coords <- c(dims$edge_min, line, dims$edge_max, line)
+    } else {
+      stop("Invalid line type - expects horizontal or vertical.")
     }
       
     line_const <- sf::st_sfc(
@@ -139,11 +141,26 @@ st_unknown_pleasures <- function(
         (dims$type == "horizontal"),
         geometry + c(0, elev_scaled),
         geometry + c(elev_scaled, 0)
-        )
+        ),
+      coords = ifelse(
+        (dims$type == "horizontal"),
+        st_coordinates(geometry)[,1],
+        st_coordinates(geometry)[,2]
+      )
     ) %>%
     dplyr::ungroup() %>%
     sf::st_set_crs(sf::st_crs(lines)) %>%
-    group_by(id) %>%
+    group_by(id) 
+  
+  if (dims$type == "vertical") {
+    elevated_lines <- elevated_lines %>%
+      arrange(coords, .by_group = TRUE) 
+  } else if (dims$type == "horizontal") {
+    elevated_lines <- elevated_lines %>%
+      arrange(desc(coords), .by_group = TRUE) 
+  }
+  
+  elevated_lines <- elevated_lines %>%
     summarize(do_union = FALSE) %>%
     sf::st_cast("LINESTRING")
 
