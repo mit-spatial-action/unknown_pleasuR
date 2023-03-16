@@ -50,7 +50,7 @@ st_regular_lines <- function(df, dims, mask = TRUE) {
   lines <- sf::st_sfc(crs = sf::st_crs(df))
   for (line in line_positions) {
     if (dims$type == "vertical") {
-      coords <- c(line, dims$edge_min, line, dims$edge_max)
+      coords <- c(line, dims$edge_max, line, dims$edge_min)
     } else if (dims$type == "horizontal") {
       coords <- c(dims$edge_min, line, dims$edge_max, line)
     }
@@ -151,10 +151,10 @@ st_unknown_pleasures <- function(
     print("Building polygons...")
     lines <- lines %>%
       dplyr::filter(id %in% dplyr::pull(elevated_lines, id))
-    dplyr::bind_rows(lines, elevated_lines) %>%
+    dplyr::bind_rows(elevated_lines, lines) %>%
       sf::st_cast("POINT") %>%
       dplyr::group_by(id) %>%
-      dplyr::summarize() %>%
+      dplyr::summarize(do_union = FALSE) %>%
       sf::st_cast("POLYGON") %>%
       dplyr::arrange(desc(id)) %>%
       dplyr::ungroup ()
