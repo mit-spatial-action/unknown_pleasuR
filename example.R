@@ -1,21 +1,18 @@
 source("unknown_pleasures.R")
 library(raster)
+library(tigris)
 library(tidycensus)
 library(stringr)
 library(purrr)
 library(gstat)
+library(dplyr)
+library(tidyr)
 
 vars <- list(
   # Show variables with...
   # vars <- load_variables(2019, "acs5", cache = TRUE)
-  tot_hh = "B25003_001",
   tot_rental_hh = "B25003_003", 
-  white_renters = "B25003H_003", 
   black_renters = "B25003B_003", 
-  indig_renters = "B25003C_003",
-  asian_renters = "B25003D_003", 
-  pi_renters = "B25003E_003",
-  other_renters = "B25003F_003",
   latinx_renters = "B25003I_003"
 )
 
@@ -30,15 +27,16 @@ table <- get_acs(
   geometry = FALSE
 )
 
-library(tigris)
 tracts_geom <- tracts("MA", year = 2020, cb = TRUE)
 
-tracts_table <- get_acs(geography="tract", 
-                        variables = var_list, 
-                        state="MA",
-                        year=2020, 
-                        survey='acs5',
-                        geometry=FALSE) %>%
+tracts_table <- get_acs(
+    geography="tract", 
+    variables = var_list, 
+    state="MA",
+    year=2020, 
+    survey='acs5',
+    geometry=FALSE
+  ) %>%
   rename_with(str_to_lower) %>%
   dplyr::select(-c('moe')) %>%
   pivot_wider(names_from = 'variable', values_from = 'estimate') %>%
@@ -47,15 +45,8 @@ tracts_table <- get_acs(geography="tract",
     id = geoid
   ) %>%
   mutate(
-    rent_pct = tot_rental_hh / tot_hh,
-    rent_pct_white = white_renters / tot_rental_hh,
-    rent_pct_nonwhite = 1 - rent_pct_white,
     rent_pct_black = black_renters / tot_rental_hh, 
-    rent_pct_asian = asian_renters / tot_rental_hh,
-    rent_pct_aapi = (asian_renters + pi_renters) / tot_rental_hh,
-    rent_pct_latinx = latinx_renters / tot_rental_hh,
-    rent_pct_indig = indig_renters / tot_rental_hh,
-    rent_pct_other = other_renters / tot_rental_hh
+    rent_pct_latinx = latinx_renters / tot_rental_hh
   ) 
 
 tracts <- tracts_geom %>%
@@ -67,48 +58,29 @@ tracts <- tracts_geom %>%
   ) %>%
   left_join(tracts_table, by = "id")
 
-raster_black_renters <- interpolate(
-    raster(tracts, res=500),
-    gstat(
-      formula = rent_pct_black ~ 1, 
-      nmax = 20, 
-      set = list(idp = 2), 
-      data = st_centroid(drop_na(tracts, rent_pct_black))
-    )
-  ) %>%
-  mask(tracts)
-
-raster_latinx_renters <- interpolate(
-    raster(tracts, res=500),
-    gstat(
-      formula = rent_pct_latinx ~ 1, 
-      nmax = 20, 
-      set = list(idp = 2), 
-      data = st_centroid(drop_na(tracts, rent_pct_latinx))
-    )
-  ) %>%
-  mask(tracts)
+dims <- get_dims(tracts, n = 100, type = "vertical")
 
 lines <- tracts %>%
   st_union() %>%
   st_regular_lines(
-    n = 100,
-    mask = TRUE,
-    type = "horizontal"
+    dims = dims,
+    mask = TRUE
   )
 
 black_renters <- lines %>%
   st_unknown_pleasures(
-    raster_black_renters, 
-    n = 100, 
-    sample_size = 500, 
-    bleed_factor = 2
-  )
+    raster_black_renters,
+    dims = dims,
+    sample_size = 250, 
+    bleed_factor = 2,
+    polygon = TRUE
+  ) 
 
 latinx_renters <- lines %>%
   st_unknown_pleasures(
     raster_latinx_renters, 
-    n = 100, 
-    sample_size = 500, 
-    bleed_factor = 2
+    dims = dims,
+    sample_size = 250, 
+    bleed_factor = 2,
+    polygon = TRUE
   )
