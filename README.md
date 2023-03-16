@@ -4,7 +4,7 @@
 
 Generates regular section cuts through a raster surface for a given extent. Produces results that look quite a lot like the cover of Joy Division's _Unknown Pleasures_ (1979). Also quite a lot like some of the work of the Harvard Laboratory for Computer Graphics and Spaital Analysis (RIP). Also, scholarly integrity requires that I say: [James Cheshire got here first.](https://jcheshire.com/resources/joy-division-population-surfaces-and-pioneering-electronic-cartography/)
 
-General workflow looks like the below. (For a more thoroughly fleshed out example using real data, see `example.R`.) Assuming an `sf` dataframe containing polygons or multipolygons (`polygons`) and a raster surface (`raster`), this generates regularly spaced lines (`st_regular_lines()`) and effecitvely "drapes" them over a raster surface, returning polygonal section cuts (`st_unknown_pleasures()`).
+General workflow looks like the below. (For a more thoroughly fleshed out example using real data, see `example.R`.) Assuming an `sf` dataframe containing polygons or multipolygons (`polygons`) and a raster surface (`raster`), this generates regularly spaced lines (`st_regular_lines()`) and effecitvely "drapes" them over a raster surface, returning either polygonal or linestring section cuts (`st_unknown_pleasures()`).
 
 Orientation and number of cut lines is set through `get_dims()` which returns a set of parameters that are subsequently passed to `st_regular_lines()` and `st_unknown_pleasures()`.
 
@@ -24,6 +24,7 @@ unknown_pleasures <- lines %>%
     dims = dims,
     sample_size = 250, 
     bleed_factor = 2,
+    # If FALSE, returns linestrings
     polygon = TRUE
   )
 ```
