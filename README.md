@@ -9,7 +9,7 @@ General workflow looks like the below. (For a more thoroughly fleshed out exampl
 Orientation and number of cut lines is set through `get_dims()` which returns a set of parameters that are subsequently passed to `st_regular_lines()` and `st_unknown_pleasures()`.
 
 ```r
-dims <- get_dims(tracts, n = 100, type = "vertical") # or "horizontal"
+dims <- get_dims(polygons, n = 100, type = "vertical") # or "horizontal"
 
 lines <- polygons %>%
   st_union() %>%
@@ -23,8 +23,34 @@ unknown_pleasures <- lines %>%
     raster,
     dims = dims,
     sample_size = 250, 
-    bleed_factor = 2,
+    bleed_factor = 3,
+    # Or "planar"
+    mode = "xyz",
     # If FALSE, returns linestrings
     polygon = TRUE
-  )
+  ) %>%
+  st_geometry() %>%
+  # We devized the "xyz" mode for export to 3D Modeling software (e.g.,
+  # Rhino), so we export to dxf.
+  st_write( 
+    "test_polys.dxf", 
+    delete_dsn = TRUE, 
+    driver = "dxf"
+    )
+
+# Or, for more GIS-ready output...
+unknown_pleasures <- lines %>%
+  st_unknown_pleasures(
+    raster,
+    dims = dims,
+    sample_size = 250, 
+    bleed_factor = 3,
+    mode = "planar",
+    polygon = TRUE
+  ) %>%
+  st_write( 
+    "test_polys.geojson", 
+    delete_dsn = TRUE
+    )
+
 ```
