@@ -7,13 +7,13 @@ library(purrr)
 library(gstat)
 library(dplyr)
 library(tidyr)
+library(sf)
 
 vars <- list(
   # Show variables with...
   # vars <- load_variables(2019, "acs5", cache = TRUE)
   tot_rental_hh = "B25003_003", 
-  black_renters = "B25003B_003", 
-  latinx_renters = "B25003I_003"
+  black_renters = "B25003B_003"
 )
 
 var_list <- unname(unlist(vars))
@@ -45,8 +45,7 @@ tracts_table <- get_acs(
     id = geoid
   ) %>%
   mutate(
-    rent_pct_black = black_renters / tot_rental_hh, 
-    rent_pct_latinx = latinx_renters / tot_rental_hh
+    rent_pct_black = black_renters / tot_rental_hh
   ) 
 
 tracts <- tracts_geom %>%
@@ -58,29 +57,18 @@ tracts <- tracts_geom %>%
   ) %>%
   left_join(tracts_table, by = "id")
 
-dims <- get_dims(tracts, n = 100, type = "vertical")
+dims <- get_dims(tracts, n = 100, type = "horizontal")
 
 raster_black_renters <- interpolate(
   raster(tracts, res=500),
   gstat(
-    formula = rent_pct_black ~ 1, 
-    nmax = 20, 
-    set = list(idp = 2), 
-    data = st_centroid(drop_na(tracts, rent_pct_black))
-  )
-) %>%
-  mask(tracts)
-
-raster_latinx_renters <- interpolate(
-  raster(tracts, res=500),
-  gstat(
-    formula = rent_pct_latinx ~ 1, 
-    nmax = 20, 
-    set = list(idp = 2), 
-    data = st_centroid(drop_na(tracts, rent_pct_latinx))
-  )
-) %>%
-  mask(tracts)
+      formula = rent_pct_black ~ 1, 
+      nmax = 20, 
+      set = list(idp = 2), 
+      data = st_point_on_surface(drop_na(tracts, rent_pct_black))
+    )
+  ) %>%
+    mask(tracts)
 
 lines <- tracts %>%
   st_union() %>%
@@ -94,18 +82,14 @@ black_renters <- lines %>%
     raster_black_renters,
     dims = dims,
     sample_size = 250, 
-    bleed_factor = 5,
+    bleed_factor = 3,
     mode = "xyz",
-    polygon = FALSE
+    polygon = TRUE
   )
 
-
-
-latinx_renters <- lines %>%
-  st_unknown_pleasures(
-    raster_latinx_renters, 
-    dims = dims,
-    sample_size = 250, 
-    bleed_factor = 2,
-    polygon = TRUE
+st_write(
+  st_geometry(black_renters), 
+  "test_polys.dxf", 
+  delete_dsn = TRUE, 
+  driver = "dxf"
   )

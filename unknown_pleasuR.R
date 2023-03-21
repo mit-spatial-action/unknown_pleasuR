@@ -120,7 +120,7 @@ st_unknown_pleasures <- function(
         type = "regular"
       )
     ) %>%
-    sf::st_cast("POINT")
+    sf::st_cast("POINT", warn = FALSE)
     
   message("Extracting elevations at sample points...")
   elevated_lines$elev <- raster::extract(raster, elevated_lines)
@@ -129,16 +129,16 @@ st_unknown_pleasures <- function(
     max <- max(abs(elevated_lines$elev), na.rm = TRUE)
   }
   scale <- dims$interval / max
-  message("Performing Affine Transform on points...")
   elevated_lines <- elevated_lines %>%
     tidyr::drop_na(elev) %>%
     dplyr::group_by(id) %>%
     dplyr::filter(n() > 1) %>%
     dplyr::ungroup() %>%
     dplyr::mutate(
-      elev_scaled = elev * (scale * bleed_factor)
-    ) 
+      elev_scaled = (elev + (elev * 0.1)) * (scale * bleed_factor)
+    )
   if (mode == "planar") {
+    message("Performing Affine Transform on points...")
     elevated_lines <- elevated_lines %>%
       dplyr::rowwise() %>%
       dplyr::mutate(
@@ -149,57 +149,73 @@ st_unknown_pleasures <- function(
           ),
         coords = ifelse(
           (dims$type == "horizontal"),
-          st_coordinates(geometry)[,1],
-          st_coordinates(geometry)[,2]
+          sf::st_coordinates(geometry)[,1],
+          sf::st_coordinates(geometry)[,2]
         )
       ) %>%
       dplyr::ungroup() %>%
       sf::st_set_crs(sf::st_crs(lines)) %>%
-      group_by(id)
+      dplyr::group_by(id)
       if (dims$type == "vertical") {
         elevated_lines <- elevated_lines %>%
-          arrange(coords, .by_group = TRUE)
+          dplyr::arrange(coords, .by_group = TRUE) %>%
+          ungroup()
       } else if (dims$type == "horizontal") {
         elevated_lines <- elevated_lines %>%
-          arrange(desc(coords), .by_group = TRUE)
+          dplyr::arrange(desc(coords), .by_group = TRUE) %>%
+          ungroup()
       }
   } else if (mode == "xyz") {
+    message("Attaching Z values to component points...")
     elevated_lines <- elevated_lines %>%
-      mutate(
-        x = st_coordinates(.)[,1],
-        y = st_coordinates(.)[,2]
+      dplyr::mutate(
+        x = sf::st_coordinates(.)[,1],
+        y = sf::st_coordinates(.)[,2]
       ) %>%
-      st_drop_geometry() %>%
-      st_as_sf(
+      sf::st_drop_geometry() %>%
+      sf::st_as_sf(
         coords = c("x", "y", "elev_scaled"),
         dim = "XYZ",
-        crs = st_crs(lines)
-      ) %>%
-      group_by(id)
+        crs = sf::st_crs(lines)
+      )
   }
   elevated_lines <- elevated_lines %>%
-    summarize(do_union = FALSE) %>%
+    dplyr::group_by(id) %>%
+    dplyr::summarize(do_union = FALSE) %>%
     sf::st_cast("LINESTRING")
+  
   if (polygon) {
+    message("Building closed loops...")
+    lines <- lines %>%
+      dplyr::filter(
+        id %in% dplyr::pull(elevated_lines, id)
+      )
     if (mode == "xyz") {
-      warning("Polygon-building is not supported in xyz mode.")
-      elevated_lines <- elevated_lines %>%
-        dplyr::bind_rows(st_zm(lines, drop = FALSE, what = "Z"))
-      elevated_lines
-    } else {
-      message("Building polygons...")
       lines <- lines %>%
-        dplyr::filter(id %in% dplyr::pull(elevated_lines, id))
-      dplyr::bind_rows(elevated_lines, lines) %>%
-        sf::st_cast("POINT") %>%
-        dplyr::group_by(id) %>%
-        dplyr::summarize(do_union = FALSE) %>%
-        sf::st_cast("POLYGON") %>%
-        dplyr::arrange(desc(id)) %>%
-        dplyr::ungroup()
+        sf::st_zm(
+          drop = FALSE, 
+          what = "Z"
+        ) %>%
+        st_reverse()
     }
+    elevated_lines <- elevated_lines %>%
+      dplyr::bind_rows(lines) %>%
+      sf::st_cast("POINT", warn = FALSE) %>%
+      dplyr::group_by(id) %>%
+      dplyr::summarize(do_union = FALSE) %>%
+      sf::st_cast("POLYGON") %>%
+      dplyr::ungroup() %>%
+      dplyr::arrange(desc(id))
+    if (mode == "xyz") {
+      warning("Can't build polygons in XYZ mode---returning POLYLINES instead.")
+      elevated_lines %>%
+        st_cast("LINESTRING", warn = FALSE)
+    } else {
+      message("Returning polygons.")
+      elevated_lines
+    }
+    
   } else {
     elevated_lines
   }
-  elevated_lines
 }
