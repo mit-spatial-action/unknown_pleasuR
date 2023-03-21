@@ -26,7 +26,8 @@ unknown_pleasures <- lines %>%
     bleed_factor = 3,
     # Or "planar"
     mode = "xyz",
-    # If FALSE, returns linestrings
+    # Strictly speaking, the "xyz" and polygon
+    # combination leaves you with closed LINESTRINGs
     polygon = TRUE
   ) %>%
   st_geometry() %>%
