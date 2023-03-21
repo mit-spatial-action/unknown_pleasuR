@@ -39,7 +39,7 @@ st_regular_lines <- function(df, dims, mask = TRUE) {
   #' @param type String indicating direction of lines---options are "horizontal" and "vertical".
   #' @returns A list of interval-relevant values.
   #' @export
-  print("Generating regularly spaced lines over input bbox...")
+  message("Generating regularly spaced lines over input bbox...")
   bbox <- df %>%
     sf::st_bbox()
   line_positions <- seq(
@@ -74,7 +74,7 @@ st_regular_lines <- function(df, dims, mask = TRUE) {
   }
   sf <- sf::st_as_sf(data.frame(id = 1:dims$n, geometry = lines)) 
   if (mask) {
-    print("Clipping lines to input layer extent...")
+    message("Clipping lines to input layer extent...")
     sf %>%
       sf::st_intersection(
         sf::st_geometry(df)
@@ -99,6 +99,7 @@ st_unknown_pleasures <- function(
     max = FALSE,
     sample_size = 250,
     bleed_factor = 1.5,
+    mode = "planar",
     polygon = TRUE) {
   #' Transforms regularly-spaced lines into an "Unknown Pleasures"-esque set of regular section cuts based on raster value.
   #'
@@ -106,10 +107,11 @@ st_unknown_pleasures <- function(
   #' @param dims 
   #' @param sample_size Interval, in meters, to sample along lines.
   #' @param bleed_factor How much should maxima bleed into the area of the line above or below.
+  #' @param mode If `planar`, results will be planar offset lines. If `xyz`, lines will be offset on `LINESTRING` z axis.
   #' @param polygon If `TRUE`, outputs polygons. If `FALSE`, outputs lines.
   #' @returns A spatial dataframe containing "Unknown Pleasures" features.
   #' @export
-  print("Sampling along lines...")
+  message("Sampling along lines...")
   elevated_lines <- lines %>%
     dplyr::mutate(
       geometry = sf::st_line_sample(
@@ -120,13 +122,14 @@ st_unknown_pleasures <- function(
     ) %>%
     sf::st_cast("POINT")
     
-  print("Extracting elevations at sample points...")
+  message("Extracting elevations at sample points...")
   elevated_lines$elev <- raster::extract(raster, elevated_lines)
+  elevated_lines
   if (!max) {
     max <- max(abs(elevated_lines$elev), na.rm = TRUE)
   }
   scale <- dims$interval / max
-  print("Performing Affine Transform on points...")
+  message("Performing Affine Transform on points...")
   elevated_lines <- elevated_lines %>%
     tidyr::drop_na(elev) %>%
     dplyr::group_by(id) %>%
@@ -134,48 +137,69 @@ st_unknown_pleasures <- function(
     dplyr::ungroup() %>%
     dplyr::mutate(
       elev_scaled = elev * (scale * bleed_factor)
-    ) %>%
-    dplyr::rowwise() %>%
-    dplyr::mutate(
-      geometry = ifelse(
-        (dims$type == "horizontal"),
-        geometry + c(0, elev_scaled),
-        geometry + c(elev_scaled, 0)
-        ),
-      coords = ifelse(
-        (dims$type == "horizontal"),
-        st_coordinates(geometry)[,1],
-        st_coordinates(geometry)[,2]
-      )
-    ) %>%
-    dplyr::ungroup() %>%
-    sf::st_set_crs(sf::st_crs(lines)) %>%
-    group_by(id) 
-  
-  if (dims$type == "vertical") {
+    ) 
+  if (mode == "planar") {
     elevated_lines <- elevated_lines %>%
-      arrange(coords, .by_group = TRUE) 
-  } else if (dims$type == "horizontal") {
+      dplyr::rowwise() %>%
+      dplyr::mutate(
+        geometry = ifelse(
+          (dims$type == "horizontal"),
+          geometry + c(0, elev_scaled),
+          geometry + c(elev_scaled, 0)
+          ),
+        coords = ifelse(
+          (dims$type == "horizontal"),
+          st_coordinates(geometry)[,1],
+          st_coordinates(geometry)[,2]
+        )
+      ) %>%
+      dplyr::ungroup() %>%
+      sf::st_set_crs(sf::st_crs(lines)) %>%
+      group_by(id)
+      if (dims$type == "vertical") {
+        elevated_lines <- elevated_lines %>%
+          arrange(coords, .by_group = TRUE)
+      } else if (dims$type == "horizontal") {
+        elevated_lines <- elevated_lines %>%
+          arrange(desc(coords), .by_group = TRUE)
+      }
+  } else if (mode == "xyz") {
     elevated_lines <- elevated_lines %>%
-      arrange(desc(coords), .by_group = TRUE) 
+      mutate(
+        x = st_coordinates(.)[,1],
+        y = st_coordinates(.)[,2]
+      ) %>%
+      st_drop_geometry() %>%
+      st_as_sf(
+        coords = c("x", "y", "elev_scaled"),
+        dim = "XYZ",
+        crs = st_crs(lines)
+      ) %>%
+      group_by(id)
   }
-  
   elevated_lines <- elevated_lines %>%
     summarize(do_union = FALSE) %>%
     sf::st_cast("LINESTRING")
-
   if (polygon) {
-    print("Building polygons...")
-    lines <- lines %>%
-      dplyr::filter(id %in% dplyr::pull(elevated_lines, id))
-    dplyr::bind_rows(elevated_lines, lines) %>%
-      sf::st_cast("POINT") %>%
-      dplyr::group_by(id) %>%
-      dplyr::summarize(do_union = FALSE) %>%
-      sf::st_cast("POLYGON") %>%
-      dplyr::arrange(desc(id)) %>%
-      dplyr::ungroup ()
+    if (mode == "xyz") {
+      warning("Polygon-building is not supported in xyz mode.")
+      elevated_lines <- elevated_lines %>%
+        dplyr::bind_rows(st_zm(lines, drop = FALSE, what = "Z"))
+      elevated_lines
+    } else {
+      message("Building polygons...")
+      lines <- lines %>%
+        dplyr::filter(id %in% dplyr::pull(elevated_lines, id))
+      dplyr::bind_rows(elevated_lines, lines) %>%
+        sf::st_cast("POINT") %>%
+        dplyr::group_by(id) %>%
+        dplyr::summarize(do_union = FALSE) %>%
+        sf::st_cast("POLYGON") %>%
+        dplyr::arrange(desc(id)) %>%
+        dplyr::ungroup()
+    }
   } else {
     elevated_lines
   }
+  elevated_lines
 }

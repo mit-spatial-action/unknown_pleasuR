@@ -1,4 +1,4 @@
-source("unknown_pleasures.R")
+source("unknown_pleasuR.R")
 library(raster)
 library(tigris)
 library(tidycensus)
@@ -60,6 +60,28 @@ tracts <- tracts_geom %>%
 
 dims <- get_dims(tracts, n = 100, type = "vertical")
 
+raster_black_renters <- interpolate(
+  raster(tracts, res=500),
+  gstat(
+    formula = rent_pct_black ~ 1, 
+    nmax = 20, 
+    set = list(idp = 2), 
+    data = st_centroid(drop_na(tracts, rent_pct_black))
+  )
+) %>%
+  mask(tracts)
+
+raster_latinx_renters <- interpolate(
+  raster(tracts, res=500),
+  gstat(
+    formula = rent_pct_latinx ~ 1, 
+    nmax = 20, 
+    set = list(idp = 2), 
+    data = st_centroid(drop_na(tracts, rent_pct_latinx))
+  )
+) %>%
+  mask(tracts)
+
 lines <- tracts %>%
   st_union() %>%
   st_regular_lines(
@@ -72,9 +94,12 @@ black_renters <- lines %>%
     raster_black_renters,
     dims = dims,
     sample_size = 250, 
-    bleed_factor = 2,
-    polygon = TRUE
-  ) 
+    bleed_factor = 5,
+    mode = "xyz",
+    polygon = FALSE
+  )
+
+
 
 latinx_renters <- lines %>%
   st_unknown_pleasures(
