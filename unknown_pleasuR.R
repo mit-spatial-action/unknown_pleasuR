@@ -83,7 +83,7 @@ st_regular_lines <- function(df, dims, mask = TRUE) {
       dplyr::filter(st_geometry_type(geometry) != "POINT") %>%
       dplyr::ungroup() %>% 
       sf::st_cast("MULTILINESTRING") %>%
-      sf::st_cast("LINESTRING") %>%
+      sf::st_cast("LINESTRING", warn = FALSE) %>%
       dplyr::mutate(
         id = dplyr::row_number()
       )
@@ -135,7 +135,7 @@ st_unknown_pleasures <- function(
     dplyr::filter(n() > 1) %>%
     dplyr::ungroup() %>%
     dplyr::mutate(
-      elev_scaled = (elev + (elev * 0.1)) * (scale * bleed_factor)
+      elev_scaled = (elev + (0.01 * elev)) * (scale * bleed_factor)
     )
   if (mode == "planar") {
     message("Performing Affine Transform on points...")
@@ -208,11 +208,68 @@ st_unknown_pleasures <- function(
       dplyr::arrange(desc(id))
     if (mode == "xyz") {
       warning("Can't build polygons in XYZ mode---returning POLYLINES instead.")
+      elevated_lines <- elevated_lines %>%
+        sf::st_cast("POINT", warn = FALSE) %>%
+        dplyr::mutate(
+          z = sf::st_coordinates(.)[,3]
+        ) %>%
+        sf::st_zm(drop = TRUE) %>%
+        dplyr::rowwise() %>%
+        dplyr::mutate(
+          geometry = ifelse(
+            (dims$type == "horizontal"),
+            geometry + c(0, z),
+            geometry + c(z, 0)
+          )
+        ) %>%
+        ungroup() %>%
+        dplyr::group_by(id) %>%
+        dplyr::summarize(do_union = FALSE) %>%
+        sf::st_cast("POLYGON") %>%
+        ungroup() %>%
+        st_buffer(0.0) %>%
+        sf::st_cast("MULTIPOLYGON") %>%
+        sf::st_cast("POLYGON", warn = FALSE) %>%
+        st_buffer(0.0) %>%
+        sf::st_make_valid() %>%
+        mutate(
+          id = row_number()
+        ) %>%
+        sf::st_cast("POINT", warn = FALSE) %>%
+        mutate(
+          x = st_coordinates(.)[,1],
+          y = st_coordinates(.)[,2]
+        ) %>%
+        st_drop_geometry() %>%
+        group_by(id) 
+      if (dims$type == "horizontal") {
+        elevated_lines <- elevated_lines %>%
+          mutate(
+            z = y - min(y),
+            y = y - z
+          )
+      } else {
+        elevated_lines <- elevated_lines %>%
+          mutate(
+            z = x - min(x),
+            x = x - z
+          )
+      }
       elevated_lines %>%
-        st_cast("LINESTRING", warn = FALSE)
+        st_as_sf(
+          coords = c("x", "y", "z"),
+          dim = "XYZ",
+          crs = st_crs(lines)
+        ) %>%
+        group_by(id) %>%
+        filter(n() >= 4) %>%
+        dplyr::summarize(do_union = FALSE) %>%
+        sf::st_cast("POLYGON") %>%
+        sf::st_cast("LINESTRING", warn = FALSE)
     } else {
       message("Returning polygons.")
-      elevated_lines
+      elevated_lines %>%
+        st_buffer(0.0)
     }
     
   } else {

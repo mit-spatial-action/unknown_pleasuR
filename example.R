@@ -57,17 +57,17 @@ tracts <- tracts_geom %>%
   ) %>%
   left_join(tracts_table, by = "id")
 
-dims <- get_dims(tracts, n = 100, type = "horizontal")
+dims <- get_dims(tracts, n = 90, type = "horizontal")
 
 raster_black_renters <- interpolate(
-  raster(tracts, res=500),
-  gstat(
-      formula = rent_pct_black ~ 1, 
-      nmax = 20, 
-      set = list(idp = 2), 
-      data = st_point_on_surface(drop_na(tracts, rent_pct_black))
-    )
-  ) %>%
+    raster(tracts, res=250),
+    gstat(
+        formula = rent_pct_black ~ 1, 
+        nmax = 20, 
+        set = list(idp = 2), 
+        data = st_point_on_surface(drop_na(tracts, rent_pct_black))
+      )
+    ) %>%
     mask(tracts)
 
 lines <- tracts %>%
@@ -77,7 +77,7 @@ lines <- tracts %>%
     mask = TRUE
   )
 
-black_renters <- lines %>%
+lines %>%
   st_unknown_pleasures(
     raster_black_renters,
     dims = dims,
@@ -85,11 +85,24 @@ black_renters <- lines %>%
     bleed_factor = 3,
     mode = "xyz",
     polygon = TRUE
+  ) %>% 
+  st_write(
+    st_geometry(.), 
+    "xyz_linestrings.dxf", 
+    delete_dsn = TRUE, 
+    driver = "dxf"
   )
 
-st_write(
-  st_geometry(black_renters), 
-  "test_polys.dxf", 
-  delete_dsn = TRUE, 
-  driver = "dxf"
+lines %>%
+  st_unknown_pleasures(
+    raster_black_renters,
+    dims = dims,
+    sample_size = 250, 
+    bleed_factor = 3,
+    mode = "planar",
+    polygon = TRUE
+  ) %>% st_write(
+    st_geometry(black_renters), 
+    "planar_polys.geojson", 
+    delete_dsn = TRUE
   )
