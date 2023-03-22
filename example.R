@@ -86,8 +86,8 @@ lines %>%
     mode = "xyz",
     polygon = TRUE
   ) %>% 
-  st_write(
-    st_geometry(.), 
+  st_geometry() %>%
+  st_write( 
     "xyz_linestrings.dxf", 
     delete_dsn = TRUE, 
     driver = "dxf"
@@ -101,8 +101,8 @@ lines %>%
     bleed_factor = 3,
     mode = "planar",
     polygon = TRUE
-  ) %>% st_write(
-    st_geometry(black_renters), 
+  ) %>% 
+  st_write(
     "planar_polys.geojson", 
     delete_dsn = TRUE
   )
