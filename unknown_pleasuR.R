@@ -136,7 +136,8 @@ st_unknown_pleasures <- function(
     dplyr::ungroup() %>%
     dplyr::mutate(
       elev_scaled = (elev + (0.01 * elev)) * (scale * bleed_factor)
-    )
+    ) %>%
+    tidyr::drop_na(elev_scaled)
   if (mode == "planar") {
     message("Performing Affine Transform on points...")
     elevated_lines <- elevated_lines %>%
@@ -159,7 +160,7 @@ st_unknown_pleasures <- function(
       if (dims$type == "vertical") {
         elevated_lines <- elevated_lines %>%
           dplyr::arrange(coords, .by_group = TRUE) %>%
-          ungroup()
+          dplyr::ungroup()
       } else if (dims$type == "horizontal") {
         elevated_lines <- elevated_lines %>%
           dplyr::arrange(dplyr::desc(coords), .by_group = TRUE) %>%
