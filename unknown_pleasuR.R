@@ -5,7 +5,6 @@ get_dims <- function(sdf, n, type = "horizontal") {
   #' @param n Number of regularly-spaced lines to generate.
   #' @param type String indicating direction of lines---options are "horizontal" and "vertical".
   #' @returns A list of interval-relevant values.
-  #' @export
   if (type == "horizontal") {
     axes <- list("int_dim" = "y", "edge_dim" = "x")
   } else if (type == "vertical") {
@@ -36,8 +35,7 @@ st_regular_lines <- function(df, dims, mask = TRUE) {
   #' @param df An `sf` dataframe.
   #' @param dims Object returned by `get_dims()`.
   #' @param mask Whether resulting lines should be clipped to df extent.
-  #' @param type String indicating direction of lines---options are "horizontal" and "vertical".
-  #' @returns A list of interval-relevant values.
+  #' @returns A sf dataframe of regularly spaced POLYLINEs.
   #' @export
   message("Generating regularly spaced lines over input bbox...")
   bbox <- df %>%
